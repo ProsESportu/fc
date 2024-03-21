@@ -56,9 +56,9 @@ class Gyro:
         # y_high = self.i2c.readfrom_mem(DEVICE_ADDRESS, 0x2b, 1)[0]
         z_low = self.i2c.readfrom_mem(DEVICE_ADDRESS, 0x2c, 2)
         # z_high = self.i2c.readfrom_mem(DEVICE_ADDRESS, 0x2d, 1)[0]
-        x = ustruct.unpack("<h", x_low)[0]
-        y = ustruct.unpack("<h", y_low)[0]
-        z = ustruct.unpack("<h", z_low)[0]
+        x: int = ustruct.unpack("<h", x_low)[0]
+        y: int = ustruct.unpack("<h", y_low)[0]
+        z: int = ustruct.unpack("<h", z_low)[0]
 
         # x = int.from_bytes(x_low, "little", signed=True)
         # y = int.from_bytes(y_low, "little", signed=True)
@@ -66,15 +66,29 @@ class Gyro:
         return x, y, z
 
     def calibrate(self, count=10_000):
+        x_sum = 0
+        y_sum = 0
+        z_sum = 0
         for i in range(count):
             x, y, z = self.read()
-            self.avg_x += x
-            self.avg_y += y
-            self.avg_z += z
+            x_sum += x
+            y_sum += y
+            z_sum += z
+        self.avg_x = x_sum // count
+        self.avg_y = y_sum // count
+        self.avg_z = z_sum // count
 
-    def read_calibrated(self):
+    def read_calibrated(self) -> tuple[int, int, int]:
         x, y, z = self.read()
-        return x / self.avg_x, y / self.avg_y, z / self.avg_z
+        return x - self.avg_x, y - self.avg_y, z - self.avg_z
+
+    def read_calibrated_mapped(self) -> tuple[float, float, float]:
+        x, y, z = self.read_calibrated()
+        return (
+            map_from_to(x, -32768, 32767, -1, 1),
+            map_from_to(y, -32768, 32767, -1, 1),
+            map_from_to(z, -32768, 32767, -1, 1),
+        )
 
 
 class Drives:
@@ -135,7 +149,7 @@ pid_roll = PID(1, 0, 0, CYCLE_TIME, 1)
 receiver = RCReceiver([4, 5, 6, 7], (1_000, 2_000))
 while True:
     loop_start = time.ticks_us()
-    yaw_change, pitch_change, roll_change = gyro.read_calibrated()
+    yaw_change, pitch_change, roll_change = gyro.read_calibrated_mapped()
     current_yaw += yaw_change
     current_pitch += pitch_change
     current_roll += roll_change
