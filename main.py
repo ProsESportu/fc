@@ -1,9 +1,11 @@
-from machine import time_pulse_us, Pin, I2C, PWM
-from math import sqrt
-import ustruct
 import time
+from math import sqrt
 
-DEVICE_ADDRESS = 0b1101011
+import ustruct
+from machine import time_pulse_us, Pin, I2C, PWM
+from micropython import const
+
+DEVICE_ADDRESS = const(0b1101011)
 
 
 def map_from_to(val, in_low, in_high, out_low, out_high):
@@ -17,11 +19,10 @@ def normalize_vec(x, y, z):
 
 
 class RCReceiver:
-    def __init__(self, pins: list[Pin] | list[int], value_range: (int, int) = None):
+    def __init__(self, pins: list[Pin | int], value_range: tuple[int, int] | None = None):
         if len(pins) < 1 or len(pins) > 6:
             raise Exception("wrong number of pins", pins)
-        if isinstance(pins[0], int):
-            pins = [Pin(i, Pin.IN) for i in pins]
+        pins: list[Pin] = [Pin(i, Pin.IN) for i in pins if not isinstance(i, Pin)]
         self.pins = pins
         self.value_range = value_range
 
@@ -42,9 +43,9 @@ class Gyro:
             signal = Pin(signal)
         if not isinstance(clock, Pin):
             clock = Pin(clock)
-            self.avg_x = 0
-            self.avg_y = 0
-            self.avg_z = 0
+        self.avg_x = 0
+        self.avg_y = 0
+        self.avg_z = 0
         self.i2c = I2C(slice_id, scl=clock, sda=signal, freq=freq)
         self.i2c.writeto_mem(DEVICE_ADDRESS, 0x20, 0b10001111.to_bytes())
 
@@ -79,14 +80,6 @@ class Gyro:
 class Drives:
     def __init__(self, front_left: Pin | int, front_right: Pin | int, rear_right: Pin | int, rear_left: Pin | int,
                  freq: int = 50):
-        if not isinstance(front_left, Pin):
-            front_left = Pin(front_left, Pin.OUT)
-        if not isinstance(front_right, Pin):
-            front_right = Pin(front_right, Pin.OUT)
-        if not isinstance(rear_right, Pin):
-            rear_right = Pin(rear_right, Pin.OUT)
-        if not isinstance(rear_left, Pin):
-            rear_left = Pin(rear_left, Pin.OUT)
         self.front_left = PWM(front_left, freq=freq)
         self.front_right = PWM(front_right, freq=freq)
         self.rear_right = PWM(rear_right, freq=freq)
@@ -110,8 +103,8 @@ class PID:
         self.kd = kd
         self.cycle_time_seconds = cycle_time_seconds
         self.i_limit = i_limit
-        self.previous_integral = 0
-        self.previous_error = 0
+        self.previous_integral: float = 0
+        self.previous_error: float = 0
 
     def update(self, goal: float, current: float):
         error = goal - current
@@ -133,8 +126,8 @@ current_pitch: float = 0
 current_roll: float = 0
 gyro = Gyro(1, 0, 1)
 gyro.calibrate()
-CYCLE_FREQ = 400
-CYCLE_TIME = 1 / CYCLE_FREQ
+CYCLE_FREQ = const(400)
+CYCLE_TIME = const(1 / CYCLE_FREQ)
 drives = Drives(0, 1, 2, 3)
 pid_yaw = PID(1, 0, 0, CYCLE_TIME, 1)
 pid_pitch = PID(1, 0, 0, CYCLE_TIME, 1)
